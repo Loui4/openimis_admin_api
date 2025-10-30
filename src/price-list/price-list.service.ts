@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CreatePLServiceDto } from './dtos/create-price-list.dto';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class PriceListService {
@@ -22,5 +24,19 @@ export class PriceListService {
       ...s,
       NumberOfServices: Number(s.NumberOfServices),
     }));
+  }
+
+   async create(dto: CreatePLServiceDto) {
+    return this.prisma.tblPLServices.create({
+      data: {
+        PLServiceUUID: randomUUID(),
+        PLServName: dto.PLServName,
+        DatePL: new Date(dto.DatePL),
+        ValidityFrom: new Date(dto.ValidityFrom),
+        AuditUserID: dto.AuditUserID,
+        LocationId: dto.LocationId ?? null,
+        LegacyID: dto.LegacyID ?? null,
+      },
+    });
   }
 }
