@@ -6,6 +6,12 @@ import { ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  app.enableCors({
+    origin: '*', // or specify domains like ['https://example.com']
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
+
   // Configure Swagger
   const config = new DocumentBuilder()
     .setTitle('Admin API')
@@ -16,9 +22,9 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,        // strips unknown properties
+      whitelist: true, // strips unknown properties
       forbidNonWhitelisted: true, // throws error for unknown props
-      transform: true,        // automatically transforms payloads to DTO instances
+      transform: true, // automatically transforms payloads to DTO instances
     }),
   );
 
