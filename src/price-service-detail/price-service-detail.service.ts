@@ -23,4 +23,32 @@ export class PriceServiceDetailService {
       ServPrice: Number(d.ServPrice),
     }));
   }
+   // 🟢 Create multiple service details for a given PLServiceID
+  async create(data: {
+    PLServiceID: number;
+    services: {
+      ServiceID: number;
+      ValidityFrom: Date;
+      ValidityTo?: Date|null;
+    }[];
+  
+  }) {
+    const { PLServiceID, services } = data;
+
+    // Build insert queries
+    const insertPromises = services.map((service) =>
+      this.prisma.tblPLServicesDetail.create({
+        data: {
+          PLServiceID,
+          ServiceID: service.ServiceID,
+          ValidityFrom: service.ValidityFrom,
+          ValidityTo: service.ValidityTo || null,
+          AuditUserID:1
+        },
+      }),
+    );
+
+    // Run all inserts in parallel
+    return await this.prisma.$transaction(insertPromises);
+  }
 }

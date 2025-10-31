@@ -4,8 +4,8 @@ import { ServiceService } from './service.service';
 import { ListServiceDto } from './dtos/list-service.dto';
 import { CreateServiceDto } from './dtos/create-service.dto';
 
-@ApiTags('Services')
-@Controller('services')
+@ApiTags('Service')
+@Controller('service')
 export class ServiceController {
   constructor(private readonly serviceService: ServiceService) {}
 

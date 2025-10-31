@@ -1,13 +1,13 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Post, Body } from '@nestjs/common';
 import { PriceServiceDetailService } from './price-service-detail.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { PriceListServiceDetailDto } from './dtos/price-service-detail.dto';
+import { CreatePriceServiceDetailDto } from './dtos/create-price-service-details.dto';
 
+@ApiTags('Price Service Detail')
 @Controller('price-service-detail')
 export class PriceServiceDetailController {
   constructor(private readonly priceServiceDetailService: PriceServiceDetailService) {}
-
-
 
   @Get()
   @ApiOperation({ summary: 'Get all PL Service Details' })
@@ -17,5 +17,20 @@ export class PriceServiceDetailController {
     @Query('priceListId') priceListId: number,
   ): Promise<PriceListServiceDetailDto[]> {
     return this.priceServiceDetailService.findAll(Number(priceListId));
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Create new PL Service Details' })
+  @ApiBody({ type: CreatePriceServiceDetailDto })
+  @ApiResponse({ status: 201, description: 'PL Service Details created successfully' })
+  async create(@Body() dto: CreatePriceServiceDetailDto) {
+    return this.priceServiceDetailService.create({
+      PLServiceID: dto.PLServiceID,
+      services: dto.services.map((s) => ({
+        ServiceID: s.ServiceID,
+        ValidityFrom: new Date(s.ValidityFrom),
+        ValidityTo: s.ValidityTo ? new Date(s.ValidityTo) : null,
+      })),
+    });
   }
 }
