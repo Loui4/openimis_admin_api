@@ -24,7 +24,7 @@ export class PriceServiceDetailController {
   @ApiBody({ type: CreatePriceServiceDetailDto })
   @ApiResponse({ status: 201, description: 'PL Service Details created successfully' })
   async create(@Body() dto: CreatePriceServiceDetailDto) {
-    return this.priceServiceDetailService.create({
+    return this.priceServiceDetailService.createOrUpdate({
       PLServiceID: dto.PLServiceID,
       services: dto.services.map((s) => ({
         ServiceID: s.ServiceID,
