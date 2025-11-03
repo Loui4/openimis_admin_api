@@ -24,31 +24,63 @@ export class PriceServiceDetailService {
     }));
   }
    // 🟢 Create multiple service details for a given PLServiceID
-  async create(data: {
-    PLServiceID: number;
-    services: {
-      ServiceID: number;
-      ValidityFrom: Date;
-      ValidityTo?: Date|null;
-    }[];
-  
-  }) {
-    const { PLServiceID, services } = data;
+ async createOrUpdate(data: {
+  PLServiceID: number;
+  services: {
+    ServiceID: number;
+    ValidityFrom: Date;
+    ValidityTo?: Date | null;
+  }[];
+}) {
+  const { PLServiceID, services } = data;
 
-    // Build insert queries
-    const insertPromises = services.map((service) =>
+  // 1️⃣ Get current services for this PLServiceID
+  const existingServices = await this.prisma.tblPLServicesDetail.findMany({
+    where: { PLServiceID },
+  });
+
+  const existingIds = existingServices.map((s) => s.ServiceID);
+  const newIds = services.map((s) => s.ServiceID);
+
+  // 2️⃣ Determine which services to create (in new array but not in existing)
+  const servicesToCreate = services.filter(
+    (s) => !existingIds.includes(s.ServiceID)
+  );
+
+  // 3️⃣ Determine which services to delete (in existing but not in new array)
+  const servicesToDelete = existingServices.filter(
+    (s) => !newIds.includes(s.ServiceID)
+  );
+
+  // 4️⃣ Build Prisma transactions
+  const transaction: any[] = [];
+
+  // Create new services
+  for (const service of servicesToCreate) {
+    transaction.push(
       this.prisma.tblPLServicesDetail.create({
         data: {
           PLServiceID,
           ServiceID: service.ServiceID,
           ValidityFrom: service.ValidityFrom,
-          ValidityTo: service.ValidityTo || null,
-          AuditUserID:1
+          ValidityTo: service.ValidityTo ?? null,
+          AuditUserID: 1, // adjust if dynamic
         },
-      }),
+      })
     );
-
-    // Run all inserts in parallel
-    return await this.prisma.$transaction(insertPromises);
   }
+
+  // Delete removed services
+  for (const service of servicesToDelete) {
+    transaction.push(
+      this.prisma.tblPLServicesDetail.delete({
+        where: { PLServiceDetailID: service.PLServiceDetailID },
+      })
+    );
+  }
+
+  // 5️⃣ Execute all in a single transaction
+  return await this.prisma.$transaction(transaction);
+}
+
 }
