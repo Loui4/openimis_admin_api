@@ -25,15 +25,36 @@ export class PriceListService {
       NumberOfServices: Number(s.NumberOfServices),
     }));
   }
+  async findOne(id: number) {
+    const services = await this.prisma.$queryRaw<any[]>`
+    SELECT p."PLServiceID",
+           p."PLServName",
+           p."DatePL",
+           COUNT(DISTINCT ps."ServiceID") AS "NumberOfServices"
+    FROM "tblPLServices" p
+    JOIN "tblPLServicesDetail" ps ON p."PLServiceID" = ps."PLServiceID"
+    WHERE p."PLServiceID"=${id}
+    GROUP BY p."PLServiceID", p."PLServName", p."DatePL"
+  `;
 
-   async create(dto: CreatePLServiceDto) {
+    if (!services.length) {
+      throw new Error(`Price list with ID ${id} not found`);
+    }
+
+    return {
+      ...services[0],
+      NumberOfServices: Number(services[0].NumberOfServices),
+    };
+  }
+
+  async create(dto: CreatePLServiceDto) {
     return this.prisma.tblPLServices.create({
       data: {
         PLServiceUUID: randomUUID(),
         PLServName: dto.PLServName,
         DatePL: new Date(dto.DatePL),
         ValidityFrom: new Date(dto.ValidityFrom),
-        AuditUserID: dto.AuditUserID,
+        AuditUserID: 1,
         LocationId: dto.LocationId ?? null,
         LegacyID: dto.LegacyID ?? null,
       },

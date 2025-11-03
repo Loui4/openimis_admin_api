@@ -17,8 +17,9 @@ export class CreatePLServiceDto {
   ValidityFrom: string;
 
   @ApiProperty({ example: 'admin', description: 'User who created or updated the record' })
+  @IsOptional()
   @IsNumber()
-  AuditUserID: number;
+  AuditUserID?: number;
 
   @ApiProperty({ example: 3, description: 'Location ID associated with this Price List Service', required: false })
   @IsOptional()

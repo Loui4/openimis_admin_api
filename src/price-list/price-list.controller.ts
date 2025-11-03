@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post } from '@nestjs/common';
 import { PriceListService } from './price-list.service';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { PriceListDto } from './dtos/price-list.dto';
 import { CreatePLServiceDto } from './dtos/create-price-list.dto';
 
@@ -22,5 +22,12 @@ export class PriceListController {
     return this.priceListService.create(dto);
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a single Price List Service by ID' })
+  @ApiParam({ name: 'id', type: Number, description: 'Price List ID' })
+  @ApiResponse({ status: 200, description: 'Single Price List Service' })
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.priceListService.findOne(id);
+  }
 
 }
