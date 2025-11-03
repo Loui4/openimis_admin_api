@@ -2,16 +2,32 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateServiceDto } from './dtos/create-service.dto';
 import { randomUUID } from 'crypto';
+import * as csv from 'csv-parse/sync';
+
+interface CsvServiceItem {
+  code: string;
+  name: string;
+  type: string;
+  level: string;
+  price: number;
+  category?: string;
+  care_type: string;
+  frequency?: number;
+  male_cat?: number;
+  female_cat?: number;
+  adult_cat?: number;
+  minor_cat?: number;
+}
 
 @Injectable()
 export class ServiceService {
   constructor(private prisma: PrismaService) {}
 
-//   async findAll(filters: { servType?: string; servLevel?: string }) {
+  // ------------------------------
+  // List all active services
+  // ------------------------------
   async findAll() {
-    // const { servType, servLevel } = filters;
-
-    let query = `
+    const query = `
       SELECT 
         s."ServiceID",
         s."ServiceUUID",
@@ -35,11 +51,7 @@ export class ServiceService {
       WHERE s."ValidityTo" IS NULL
     `;
 
-    // if (servType) query += ` AND s."ServType" = '${servType}'`;
-    // if (servLevel) query += ` AND s."ServLevel" = '${servLevel}'`;
-
     const services = await this.prisma.$queryRawUnsafe<any[]>(query);
-
     return services.map((s) => ({
       ...s,
       ServiceID: Number(s.ServiceID),
@@ -48,10 +60,13 @@ export class ServiceService {
     }));
   }
 
+  // ------------------------------
+  // Create a single service
+  // ------------------------------
   async create(dto: CreateServiceDto) {
     const uuid = randomUUID();
 
-    const result = await this.prisma.$executeRawUnsafe(`
+    await this.prisma.$executeRawUnsafe(`
       INSERT INTO "tblServices" 
         ("ServiceUUID", "ServCode", "ServName", "ServType", "ServLevel", "ServPrice",
          "ServCareType", "ServPatCat", "manualPrice", "ServPackageType", "ServCategory",
@@ -80,4 +95,297 @@ export class ServiceService {
       ServiceUUID: uuid,
     };
   }
+
+  // ------------------------------
+  // Dry Run CSV Import
+  // ------------------------------
+// ------------------------------
+// Dry Run CSV Import
+// ------------------------------
+async analyzeCsv(csvContent: string, auditUserId: number = 1) {
+  const records: CsvServiceItem[] = csv.parse(csvContent, {
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+  });
+
+  if (records.length === 0) {
+    return { 
+      inserted: 0, 
+      updated: 0, 
+      skipped: 0,
+      errorCount: 0,
+      errors: [] 
+    };
+  }
+
+  const validRecords = records.filter(r => r.code && r.code.trim() !== '');
+  
+  if (validRecords.length === 0) {
+    return {
+      inserted: 0,
+      updated: 0,
+      skipped: records.length,
+      errorCount: 1,
+      errors: [{
+        code: 'N/A',
+        friendlyMessage: 'No valid records',
+        detailedError: 'No valid records found. ServCode is required for all records.'
+      }]
+    };
+  }
+
+  const codes = validRecords.map((r) => r.code.trim());
+  
+  let existingCodes: string[] = [];
+  if (codes.length > 0) {
+    const existingServices = await this.prisma.$queryRawUnsafe<{ ServCode: string }[]>(`
+      SELECT "ServCode" FROM "tblServices" WHERE "ServCode" IN (${codes.map((c) => `'${c.replace(/'/g, "''")}'`).join(',')})
+    `);
+    existingCodes = existingServices.map((s) => s.ServCode);
+  }
+
+  let wouldInsert = 0;
+  let wouldUpdate = 0;
+  const errors: Array<{
+    code: string;
+    friendlyMessage: string;
+    detailedError: string;
+  }> = [];
+
+  // Helper function to create friendly error messages
+  const getFriendlyError = (errorType: string, details?: string): string => {
+    switch (errorType) {
+      case 'MISSING_FIELD':
+        return 'Missing required field';
+      case 'TOO_LONG':
+        return 'Value too long for field';
+      case 'INVALID_TYPE':
+        return 'Invalid data type';
+      case 'DUPLICATE':
+        return 'Duplicate record';
+      default:
+        return 'Validation error';
+    }
+  };
+
+  // Validation function
+  const validateRecord = (record: CsvServiceItem): { valid: boolean; errorType?: string; errorDetail?: string } => {
+    // Check required fields
+    if (!record.code || record.code.trim() === '') {
+      return { valid: false, errorType: 'MISSING_FIELD', errorDetail: 'ServCode is required' };
+    }
+
+    if (!record.name || record.name.trim() === '') {
+      return { valid: false, errorType: 'MISSING_FIELD', errorDetail: 'ServName is required' };
+    }
+
+    // Check field lengths
+    if (record.code.trim().length > 6) {
+      return { valid: false, errorType: 'TOO_LONG', errorDetail: 'ServCode exceeds 6 characters' };
+    }
+
+    if (record.name.length > 100) {
+      return { valid: false, errorType: 'TOO_LONG', errorDetail: 'ServName exceeds 100 characters' };
+    }
+
+    // Check data types
+    if (record.price && isNaN(Number(record.price))) {
+      return { valid: false, errorType: 'INVALID_TYPE', errorDetail: 'ServPrice must be a number' };
+    }
+
+    if (record.frequency && !isNaN(Number(record.frequency))) {
+      const freq = Number(record.frequency);
+      if (freq < -32768 || freq > 32767) {
+        return { valid: false, errorType: 'INVALID_TYPE', errorDetail: 'ServFrequency must be between -32768 and 32767' };
+      }
+    }
+
+    // Check single character fields
+    if (record.type && record.type.length > 1) {
+      return { valid: false, errorType: 'TOO_LONG', errorDetail: 'ServType must be 1 character' };
+    }
+
+    if (record.level && record.level.length > 1) {
+      return { valid: false, errorType: 'TOO_LONG', errorDetail: 'ServLevel must be 1 character' };
+    }
+
+    if (record.care_type && record.care_type.length > 1) {
+      return { valid: false, errorType: 'TOO_LONG', errorDetail: 'ServCareType must be 1 character' };
+    }
+
+    if (record.category && record.category.trim().length > 1) {
+      return { valid: false, errorType: 'TOO_LONG', errorDetail: 'ServCategory must be 1 character' };
+    }
+
+    return { valid: true };
+  };
+
+  for (const record of validRecords) {
+    // Validate the record
+    const validation = validateRecord(record);
+    
+    if (!validation.valid) {
+      errors.push({
+        code: record.code || 'UNKNOWN',
+        friendlyMessage: getFriendlyError(validation.errorType!, validation.errorDetail),
+        detailedError: validation.errorDetail || 'Validation failed',
+      });
+      continue;
+    }
+
+    // Check if it would be an insert or update
+    if (existingCodes.includes(record.code.trim())) {
+      wouldUpdate++;
+    } else {
+      wouldInsert++;
+    }
+  }
+
+  return { 
+    inserted: wouldInsert,
+    updated: wouldUpdate,
+    skipped: records.length - validRecords.length,
+    errorCount: errors.length,
+    errors: errors.length > 0 ? errors : undefined,
+  };
 }
+
+  // ------------------------------
+  // Actual Import (Insert or Update)
+  // ------------------------------
+async importCsv(csvContent: string, auditUserId: number) {
+  const records: CsvServiceItem[] = csv.parse(csvContent, {
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+  });
+
+  if (records.length === 0) {
+    return { inserted: 0, updated: 0, errors: [] };
+  }
+
+  const validRecords = records.filter(r => r.code && r.code.trim() !== '');
+  
+  if (validRecords.length === 0) {
+    throw new Error('No valid records found. ServCode is required for all records.');
+  }
+
+  const codes = validRecords.map((r) => r.code.trim());
+  
+  let existingCodes: string[] = [];
+  if (codes.length > 0) {
+    const existingServices = await this.prisma.$queryRawUnsafe<{ ServCode: string; ServiceID: number }[]>(`
+      SELECT "ServiceID", "ServCode" FROM "tblServices" WHERE "ServCode" IN (${codes.map((c) => `'${c.replace(/'/g, "''")}'`).join(',')})
+    `);
+    existingCodes = existingServices.map((s) => s.ServCode);
+  }
+
+  let inserted = 0;
+  let updated = 0;
+  const errors: Array<{
+    code: string;
+    friendlyMessage: string;
+    detailedError: string;
+  }> = [];
+
+  // Helper function to create friendly error messages
+  const getFriendlyError = (errorMessage: string): string => {
+    if (errorMessage.includes('23502')) {
+      return 'Missing required field';
+    } else if (errorMessage.includes('22001')) {
+      return 'Value too long for field';
+    } else if (errorMessage.includes('42601')) {
+      return 'Invalid SQL syntax';
+    } else if (errorMessage.includes('23505')) {
+      return 'Duplicate record';
+    } else if (errorMessage.includes('22P02')) {
+      return 'Invalid data type';
+    } else {
+      return 'Database error';
+    }
+  };
+
+  for (const record of validRecords) {
+    try {
+      const code = record.code.trim().replace(/'/g, "''").substring(0, 6);
+      const name = (record.name || '').replace(/'/g, "''").substring(0, 100);
+      const type = (record.type || 'C').replace(/'/g, "''").substring(0, 1);
+      const level = (record.level || 'S').replace(/'/g, "''").substring(0, 1);
+      const price = record.price || 0;
+      const careType = (record.care_type || 'O').replace(/'/g, "''").substring(0, 1);
+      
+      // Handle category - can be NULL
+      let category = 'NULL';
+      if (record.category && record.category.trim()) {
+        category = `'${record.category.trim().replace(/'/g, "''").substring(0, 1)}'`;
+      }
+      
+      // Handle frequency - must be integer or NULL
+      let frequency = 'NULL';
+      if (record.frequency && !isNaN(record.frequency)) {
+        frequency = record.frequency.toString();
+      }
+
+      if (existingCodes.includes(record.code.trim())) {
+        // UPDATE
+        await this.prisma.$executeRawUnsafe(`
+          UPDATE "tblServices"
+          SET 
+            "ServName" = '${name}',
+            "ServType" = '${type}',
+            "ServLevel" = '${level}',
+            "ServPrice" = ${price},
+            "ServCareType" = '${careType}',
+            "ServCategory" = ${category},
+            "ServFrequency" = ${frequency},
+            "AuditUserID" = ${auditUserId}
+          WHERE "ServCode" = '${code}'
+        `);
+        updated++;
+      } else {
+        // INSERT
+        const uuid = randomUUID();
+        
+        const insertQuery = `
+          INSERT INTO "tblServices" (
+            "ServiceUUID", "ServCategory", "ServCode", "ServName", "ServType", "ServLevel", 
+            "ServPrice", "ServCareType", "ServFrequency", "ServPatCat", "ValidityFrom", 
+            "AuditUserID", "manualPrice", "ServPackageType"
+          ) VALUES (
+            '${uuid}', ${category}, '${code}', '${name}', '${type}', '${level}', 
+            ${price}, '${careType}', ${frequency}, 0, NOW(), 
+            ${auditUserId}, false, 'C'
+          )
+        `.replace(/\s+/g, ' ').trim();
+        
+        await this.prisma.$executeRawUnsafe(insertQuery);
+        inserted++;
+      }
+    } catch (error) {
+      errors.push({
+        code: record.code,
+        friendlyMessage: getFriendlyError(error.message),
+        detailedError: error.message,
+      });
+      
+      console.error(`❌ Error processing code '${record.code}':`, error.message);
+    }
+  }
+
+  return { 
+    inserted, 
+    updated, 
+    skipped: records.length - validRecords.length,
+    errorCount: errors.length,
+    errors: errors.length > 0 ? errors : undefined,
+  };
+}
+
+}
+
+
+
+
+
+
