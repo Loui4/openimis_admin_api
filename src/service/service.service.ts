@@ -9,10 +9,10 @@ interface CsvServiceItem {
   name: string;
   type: string;
   level: string;
-  price: number;
+  price: number|string;
   category?: string;
   care_type: string;
-  frequency?: number;
+  frequency?: number | string;
   male_cat?: number;
   female_cat?: number;
   adult_cat?: number;
@@ -99,15 +99,25 @@ export class ServiceService {
   // ------------------------------
   // Dry Run CSV Import
   // ------------------------------
-// ------------------------------
-// Dry Run CSV Import
-// ------------------------------
 async analyzeCsv(csvContent: string, auditUserId: number = 1) {
-  const records: CsvServiceItem[] = csv.parse(csvContent, {
+  let records: CsvServiceItem[] = csv.parse(csvContent, {
     columns: true,
     skip_empty_lines: true,
     trim: true,
   });
+
+  // // Filter out records where all fields are empty strings
+  // records = records.filter(record => {
+  //   // Check if at least one field has a non-empty value
+  //   return Object.values(record).some(value => 
+  //     value !== null && value !== undefined && String(value).trim() !== ''
+  //   );
+  // });
+
+  console.log('📊 Total records parsed (after filtering empty):', records.length);
+  console.log('📋 Records:', records);
+
+  // return;
 
   if (records.length === 0) {
     return { 
@@ -120,7 +130,11 @@ async analyzeCsv(csvContent: string, auditUserId: number = 1) {
   }
 
   const validRecords = records.filter(r => r.code && r.code.trim() !== '');
+  const skippedCount = records.length - validRecords.length;
   
+  console.log('✅ Valid records (with code):', validRecords.length);
+  console.log('⚠️  Skipped records (no code):', skippedCount);
+
   if (validRecords.length === 0) {
     return {
       inserted: 0,
@@ -143,6 +157,7 @@ async analyzeCsv(csvContent: string, auditUserId: number = 1) {
       SELECT "ServCode" FROM "tblServices" WHERE "ServCode" IN (${codes.map((c) => `'${c.replace(/'/g, "''")}'`).join(',')})
     `);
     existingCodes = existingServices.map((s) => s.ServCode);
+    console.log('🔍 Existing codes found:', existingCodes.length, existingCodes);
   }
 
   let wouldInsert = 0;
@@ -153,7 +168,6 @@ async analyzeCsv(csvContent: string, auditUserId: number = 1) {
     detailedError: string;
   }> = [];
 
-  // Helper function to create friendly error messages
   const getFriendlyError = (errorType: string, details?: string): string => {
     switch (errorType) {
       case 'MISSING_FIELD':
@@ -169,7 +183,6 @@ async analyzeCsv(csvContent: string, auditUserId: number = 1) {
     }
   };
 
-  // Validation function
   const validateRecord = (record: CsvServiceItem): { valid: boolean; errorType?: string; errorDetail?: string } => {
     // Check required fields
     if (!record.code || record.code.trim() === '') {
@@ -182,47 +195,58 @@ async analyzeCsv(csvContent: string, auditUserId: number = 1) {
 
     // Check field lengths
     if (record.code.trim().length > 6) {
-      return { valid: false, errorType: 'TOO_LONG', errorDetail: 'ServCode exceeds 6 characters' };
+      return { valid: false, errorType: 'TOO_LONG', errorDetail: `ServCode exceeds 6 characters: '${record.code}'` };
     }
 
     if (record.name.length > 100) {
-      return { valid: false, errorType: 'TOO_LONG', errorDetail: 'ServName exceeds 100 characters' };
+      return { valid: false, errorType: 'TOO_LONG', errorDetail: `ServName exceeds 100 characters: '${record.name.substring(0, 50)}...'` };
     }
 
-    // Check data types
-    if (record.price && isNaN(Number(record.price))) {
-      return { valid: false, errorType: 'INVALID_TYPE', errorDetail: 'ServPrice must be a number' };
+    // Validate price - convert to string for checking
+    const priceStr = String(record.price || '').trim();
+    if (priceStr && priceStr !== '') {
+      const priceNum = Number(priceStr);
+      if (isNaN(priceNum)) {
+        return { valid: false, errorType: 'INVALID_TYPE', errorDetail: `ServPrice must be a number, received: '${priceStr}'` };
+      }
     }
 
-    if (record.frequency && !isNaN(Number(record.frequency))) {
-      const freq = Number(record.frequency);
-      if (freq < -32768 || freq > 32767) {
-        return { valid: false, errorType: 'INVALID_TYPE', errorDetail: 'ServFrequency must be between -32768 and 32767' };
+    // Validate frequency - convert to string for checking
+    const freqStr = String(record.frequency || '').trim();
+    if (freqStr && freqStr !== '') {
+      const freqNum = Number(freqStr);
+      if (isNaN(freqNum)) {
+        return { valid: false, errorType: 'INVALID_TYPE', errorDetail: `ServFrequency must be a number, received: '${freqStr}'` };
+      }
+      if (!Number.isInteger(freqNum)) {
+        return { valid: false, errorType: 'INVALID_TYPE', errorDetail: `ServFrequency must be an integer, received: '${freqStr}'` };
+      }
+      if (freqNum < -32768 || freqNum > 32767) {
+        return { valid: false, errorType: 'INVALID_TYPE', errorDetail: `ServFrequency must be between -32768 and 32767, received: ${freqNum}` };
       }
     }
 
     // Check single character fields
-    if (record.type && record.type.length > 1) {
-      return { valid: false, errorType: 'TOO_LONG', errorDetail: 'ServType must be 1 character' };
+    if (record.type && record.type.trim() && record.type.length > 1) {
+      return { valid: false, errorType: 'TOO_LONG', errorDetail: `ServType must be 1 character, received: '${record.type}'` };
     }
 
-    if (record.level && record.level.length > 1) {
-      return { valid: false, errorType: 'TOO_LONG', errorDetail: 'ServLevel must be 1 character' };
+    if (record.level && record.level.trim() && record.level.length > 1) {
+      return { valid: false, errorType: 'TOO_LONG', errorDetail: `ServLevel must be 1 character, received: '${record.level}'` };
     }
 
-    if (record.care_type && record.care_type.length > 1) {
-      return { valid: false, errorType: 'TOO_LONG', errorDetail: 'ServCareType must be 1 character' };
+    if (record.care_type && record.care_type.trim() && record.care_type.length > 1) {
+      return { valid: false, errorType: 'TOO_LONG', errorDetail: `ServCareType must be 1 character, received: '${record.care_type}'` };
     }
 
-    if (record.category && record.category.trim().length > 1) {
-      return { valid: false, errorType: 'TOO_LONG', errorDetail: 'ServCategory must be 1 character' };
+    if (record.category && record.category.trim() && record.category.trim().length > 1) {
+      return { valid: false, errorType: 'TOO_LONG', errorDetail: `ServCategory must be 1 character, received: '${record.category}'` };
     }
 
     return { valid: true };
   };
 
   for (const record of validRecords) {
-    // Validate the record
     const validation = validateRecord(record);
     
     if (!validation.valid) {
@@ -234,18 +258,24 @@ async analyzeCsv(csvContent: string, auditUserId: number = 1) {
       continue;
     }
 
-    // Check if it would be an insert or update
-    if (existingCodes.includes(record.code.trim())) {
+    const trimmedCode = record.code.trim();
+    const isExisting = existingCodes.includes(trimmedCode);
+    
+    console.log(`🔎 Code: ${trimmedCode} - ${isExisting ? 'UPDATE' : 'INSERT'}`);
+    
+    if (isExisting) {
       wouldUpdate++;
     } else {
       wouldInsert++;
     }
   }
 
+  console.log(`📈 Summary: ${wouldInsert} insert, ${wouldUpdate} update, ${skippedCount} skipped, ${errors.length} errors`);
+
   return { 
     inserted: wouldInsert,
     updated: wouldUpdate,
-    skipped: records.length - validRecords.length,
+    skipped: skippedCount,
     errorCount: errors.length,
     errors: errors.length > 0 ? errors : undefined,
   };
@@ -323,7 +353,7 @@ async importCsv(csvContent: string, auditUserId: number) {
       
       // Handle frequency - must be integer or NULL
       let frequency = 'NULL';
-      if (record.frequency && !isNaN(record.frequency)) {
+      if (record.frequency && !isNaN(record.frequency as number)) {
         frequency = record.frequency.toString();
       }
 
