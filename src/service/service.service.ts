@@ -106,13 +106,7 @@ async analyzeCsv(csvContent: string, auditUserId: number = 1) {
     trim: true,
   });
 
-  // // Filter out records where all fields are empty strings
-  // records = records.filter(record => {
-  //   // Check if at least one field has a non-empty value
-  //   return Object.values(record).some(value => 
-  //     value !== null && value !== undefined && String(value).trim() !== ''
-  //   );
-  // });
+
 
   console.log('📊 Total records parsed (after filtering empty):', records.length);
   console.log('📋 Records:', records);
