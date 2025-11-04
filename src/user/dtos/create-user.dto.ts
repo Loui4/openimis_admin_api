@@ -17,19 +17,19 @@ export class CreateUserDto {
 
   @ApiProperty({ example: false })
   @IsBoolean()
-  is_staff: boolean;
+  isStaff: boolean;
 
   @ApiProperty({ example: false })
   @IsBoolean()
-  is_superuser: boolean;
+  isSuperuser: boolean;
 
   @ApiProperty({ example: '2025-01-01T00:00:00Z', required: false })
   @IsOptional()
   @IsDateString()
-  validity_from?: string | null;
+  validityFrom?: string | null;
 
   @ApiProperty({ example: '2026-01-01T00:00:00Z', required: false })
   @IsOptional()
   @IsDateString()
-  validity_to?: string | null;
+  validityTo?: string | null;
 }

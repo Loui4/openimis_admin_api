@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UnauthorizedException } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { UpdateUserDto } from './dtos/update-user.dto';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiOkResponse, ApiBadRequestResponse } from '@nestjs/swagger';
+import { LoginUserDto } from 'src/price-list/dtos/login-user.dto';
+
 
 @ApiTags('Users')
 @Controller('users')
@@ -43,5 +45,36 @@ export class UserController {
   @ApiResponse({ status: 200, description: 'User deleted successfully' })
   delete(@Param('id') id: string) {
     return this.userService.delete(id);
+  }
+
+  @Post('login')
+  @ApiOperation({ summary: 'Authenticate user with username and password' })
+  @ApiOkResponse({ description: 'User authenticated successfully' })
+  @ApiBadRequestResponse({ description: 'Invalid credentials' })
+  async login(@Body() dto: LoginUserDto) {
+    // 1️⃣ Find user by username
+    const user = await this.userService.findByUsername(dto.username)
+    if (!user) {
+      throw new UnauthorizedException('Invalid username or password');
+    }
+
+    // 2️⃣ Verify password
+    const isValid = this.userService.verifyPassword(dto.password, user.password);
+
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid username or password');
+    }
+
+    // 3️⃣ Return user info (or JWT if using authentication)
+    return {
+      message: 'Login successful',
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        isStaff: user.is_staff,
+        isSuperuser: user.is_superuser,
+      },
+    };
   }
 }
