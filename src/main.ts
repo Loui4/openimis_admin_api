@@ -15,6 +15,16 @@ async function bootstrap() {
   //   credentials: true,
   // });
 
+  app.setGlobalPrefix('api/v1');
+
+    // Redirect root '/' to '/api/v1'
+  app.use((req, res, next) => {
+    if (req.path === '/') {
+      return res.redirect('/api/v1');
+    }
+    next();
+  });
+
   // ✅ Add Global Validation Pipe
   app.useGlobalPipes(
     new ValidationPipe({
