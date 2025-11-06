@@ -2,11 +2,14 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
-import { JwtAuthGuard } from "./user/jwt-auth.guard"  // adjust path if needed
+import { JwtAuthGuard } from "./user/jwt-auth.guard";  // adjust path if needed
 import { Reflector } from '@nestjs/core';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+
+  const globalPrefix = process.env.GLOBAL_PREFIX || 'api/v1'
 
   // Optional: enable CORS if you need it
   // app.enableCors({
@@ -15,12 +18,12 @@ async function bootstrap() {
   //   credentials: true,
   // });
 
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix(globalPrefix);
 
-    // Redirect root '/' to '/api/v1'
+  // Redirect root '/' to '/api/v1'
   app.use((req, res, next) => {
     if (req.path === '/') {
-      return res.redirect('/api/v1');
+      return res.redirect(globalPrefix);
     }
     next();
   });
@@ -40,26 +43,26 @@ async function bootstrap() {
     .setDescription('API documentation for OpenIMIS Admin API')
     .setVersion('1.0')
     .addBearerAuth(
-    {
-      type: 'http',
-      scheme: 'bearer',
-      bearerFormat: 'JWT',
-      name: 'Authorization',
-      in: 'header',
-    },
-    'access-token', // <- name of the security scheme
-  )
-  .build();
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'Authorization',
+        in: 'header',
+      },
+      'access-token',
+    )
+    .build();
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  // ✅ Apply global JWT guard
   const reflector = app.get(Reflector);
   app.useGlobalGuards(new JwtAuthGuard(reflector));
 
-  await app.listen(4000);
-  console.log('🚀 Server running on http://localhost:4000');
-  console.log('📘 Swagger Docs: http://localhost:4000/api/docs');
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
+  await app.listen(port);
+  console.log(`🚀 Server running on http://localhost:${port}`);
+  console.log(`📘 Swagger Docs: http://localhost:${port}/api/docs`);
 }
 bootstrap();
