@@ -37,7 +37,9 @@ async findOne(id: number) {
           'ServiceID', s."ServiceID",
           'ServiceCode', s."ServCode",
           'ServiceName', s."ServName",
-          'PriceOverule', ps."PriceOverule"
+          'PriceOverule', ps."PriceOverule", 
+          'ServPrice', s."ServPrice",
+          'ServType', s."ServType"
         )
       ) AS "Services"
     FROM "tblPLServices" p
@@ -57,19 +59,17 @@ async findOne(id: number) {
   };
 }
 
-
-
-  async create(dto: CreatePLServiceDto) {
-    return this.prisma.tblPLServices.create({
-      data: {
-        PLServiceUUID: randomUUID(),
-        PLServName: dto.PLServName,
-        DatePL: new Date(dto.DatePL),
-        ValidityFrom: new Date(dto.ValidityFrom),
-        AuditUserID: 1,
-        LocationId: dto.LocationId ?? null,
-        LegacyID: dto.LegacyID ?? null,
-      },
-    });
-  }
+async create(dto: CreatePLServiceDto) {
+  return this.prisma.tblPLServices.create({
+    data: {
+      PLServiceUUID: randomUUID(),
+      PLServName: dto.PLServName,
+      DatePL: dto.DatePL ? new Date(dto.DatePL) : new Date(),
+      ValidityFrom: dto.ValidityFrom ? new Date(dto.ValidityFrom) : new Date(),
+      AuditUserID: 1,
+      LocationId: dto.LocationId ?? null,
+      LegacyID: dto.LegacyID ?? null,
+    },
+  });
+}
 }

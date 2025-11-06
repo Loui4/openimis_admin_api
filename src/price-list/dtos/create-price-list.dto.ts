@@ -9,12 +9,14 @@ export class CreatePLServiceDto {
   PLServName: string;
 
   @ApiProperty({ example: '2024-08-20', description: 'Date of the Price List', type: String })
+  @IsOptional()
   @IsDateString()
   DatePL: string;
 
   @ApiProperty({ example: '2024-08-01', description: 'Start date of validity', type: String })
   @IsDateString()
-  ValidityFrom: string;
+  @IsOptional()
+  ValidityFrom?: string;
 
   @ApiProperty({ example: 'admin', description: 'User who created or updated the record' })
   @IsOptional()
