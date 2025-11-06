@@ -54,7 +54,6 @@ export class UserController {
     };
   }
 
-  @Public()
   @Post()
   @ApiOperation({ summary: 'Create a new user' })
   create(@Body() dto: CreateUserDto) {
