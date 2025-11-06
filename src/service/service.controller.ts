@@ -1,12 +1,13 @@
 import { Body, Controller, Get, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiOkResponse, ApiCreatedResponse, ApiConsumes } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiOkResponse, ApiCreatedResponse, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
 import { ServiceService } from './service.service';
 import { ListServiceDto } from './dtos/list-service.dto';
 import { CreateServiceDto } from './dtos/create-service.dto';
 
 @ApiTags('Service')
 @Controller('service')
+@ApiBearerAuth('access-token')
 export class ServiceController {
   constructor(private readonly serviceService: ServiceService) {}
 

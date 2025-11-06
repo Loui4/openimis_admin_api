@@ -1,11 +1,12 @@
 import { Controller, Get, Query, Post, Body } from '@nestjs/common';
 import { PriceServiceDetailService } from './price-service-detail.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { PriceListServiceDetailDto } from './dtos/price-service-detail.dto';
 import { CreatePriceServiceDetailDto } from './dtos/create-price-service-details.dto';
 
 @ApiTags('Price Service Detail')
 @Controller('price-service-detail')
+@ApiBearerAuth('access-token')
 export class PriceServiceDetailController {
   constructor(private readonly priceServiceDetailService: PriceServiceDetailService) {}
 
