@@ -83,7 +83,7 @@ export class AppController {
       <div class="container">
         <h1>SLA Admin Portal API</h1>
         <p>Welcome! Click the button below to explore the API documentation.</p>
-        <a href="${globalPrefix}/docs" class="btn-start">Start</a>
+        <a href="/${globalPrefix}/docs" class="btn-start">Start</a>
       </div>
     </body>
     </html>
