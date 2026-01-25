@@ -7,24 +7,34 @@ import { randomUUID } from 'crypto';
 export class PriceListService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
-    const services = await this.prisma.$queryRaw<any[]>`
-      SELECT p."PLServiceID",
-             p."PLServName",
-             p."DatePL",
-             COUNT(DISTINCT ps."ServiceID") AS "NumberOfServices"
-      FROM "tblPLServices" p
-      JOIN "tblPLServicesDetail" ps ON p."PLServiceID" = ps."PLServiceID"
-      WHERE p."ValidityTo" IS NULL AND ps."ValidityTo" IS NULL
-      GROUP BY p."PLServiceID", p."PLServName", p."DatePL"
-    `;
+ async findAll() {
+  const services = await this.prisma.$queryRaw<
+    Array<{
+      PLServiceID: number;
+      PLServName: string;
+      DatePL: Date | null;
+      NumberOfServices: bigint | number;
+    }>
+  >`
+    SELECT
+      p."PLServiceID",
+      p."PLServName",
+      p."DatePL",
+      COALESCE(COUNT(DISTINCT ps."ServiceID"), 0) AS "NumberOfServices"
+    FROM "tblPLServices" p
+    LEFT JOIN "tblPLServicesDetail" ps
+      ON p."PLServiceID" = ps."PLServiceID"
+    WHERE p."ValidityTo" IS NULL
+    GROUP BY p."PLServiceID", p."PLServName", p."DatePL"
+    ORDER BY p."DatePL" DESC NULLS LAST, p."PLServiceID" DESC
+  `;
 
-    // Convert BigInt fields only
-    return services.map((s) => ({
-      ...s,
-      NumberOfServices: Number(s.NumberOfServices),
-    }));
-  }
+  return services.map((s) => ({
+    ...s,
+    NumberOfServices: Number(s.NumberOfServices),
+  }));
+}
+
 async findOne(id: number) {
   const result = await this.prisma.$queryRaw<any[]>`
     SELECT 
