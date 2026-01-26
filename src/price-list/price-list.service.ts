@@ -82,4 +82,28 @@ async create(dto: CreatePLServiceDto) {
     },
   });
 }
+
+async delete(id: number) {
+  // Ensure price list exists and is not already deleted
+  const priceList = await this.prisma.tblPLServices.findFirst({
+    where: {
+      PLServiceID: id,
+      ValidityTo: null,
+    },
+  });
+
+  if (!priceList) {
+    throw new Error(`Active price list with ID ${id} not found`);
+  }
+
+  return this.prisma.tblPLServices.update({
+    where: {
+      PLServiceID: id,
+    },
+    data: {
+      ValidityTo: new Date(),
+    },
+  });
+}
+
 }
