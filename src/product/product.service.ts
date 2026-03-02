@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CreateProductDto } from './dtos/product.dto';
 
 @Injectable()
 export class ProductService {
@@ -27,5 +29,44 @@ export class ProductService {
     MemberCount: p.MemberCount !== null ? Number(p.MemberCount) : null,
   }));
 }
+ async create(dto: CreateProductDto) {
+    const result = await this.prisma.$queryRaw<any[]>`
+      INSERT INTO "tblProduct" (
+        "ValidityFrom",
+        "ProdUUID",
+        "ProductCode",
+        "ProductName",
+        "DateFrom",
+        "DateTo",
+        "LumpSum",
+        "MemberCount",
+        "GracePeriod",
+        "AuditUserID",
+        "InsurancePeriod",
+        "LocationId"
+      )
+      VALUES (
+        NOW(),
+        ${randomUUID()},
+        ${dto.productCode},
+        ${dto.productName},
+        ${dto.dateFrom},
+        ${dto.dateTo},
+        ${dto.lumpSum},
+        ${dto.memberCount},
+        ${dto.gracePeriod},
+        ${dto.auditUserId},
+        ${dto.insurancePeriod},
+        ${dto.locationId ?? null}
+      )
+      RETURNING 
+        "ProdID",
+        "ProductCode",
+        "ProductName",
+        "MemberCount"
+    `;
+
+    return result[0];
+  }
 
 }

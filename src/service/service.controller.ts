@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiOkResponse, ApiCreatedResponse, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
 import { ServiceService } from './service.service';
@@ -22,6 +22,13 @@ export class ServiceController {
   @ApiOperation({ summary: 'Create a new service' })
   @ApiCreatedResponse({ description: 'Service successfully created' })
   async create(@Body() dto: CreateServiceDto) {
+    return this.serviceService.create(dto);
+  }
+
+  @Post('medical-service')
+  @ApiOperation({ summary: 'Create a new medical service' })
+  @ApiCreatedResponse({ description: 'Medical service successfully created' })
+  async createMedicalService(@Body() dto: CreateServiceDto) {
     return this.serviceService.create(dto);
   }
 

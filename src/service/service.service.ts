@@ -66,29 +66,30 @@ export class ServiceService {
   async create(dto: CreateServiceDto) {
     const uuid = randomUUID();
 
-    await this.prisma.$executeRawUnsafe(`
-      INSERT INTO "tblServices" 
+    await this.prisma.$executeRaw`
+      INSERT INTO "tblServices"
         ("ServiceUUID", "ServCode", "ServName", "ServType", "ServLevel", "ServPrice",
-         "ServCareType", "ServPatCat", "manualPrice", "ServPackageType", "ServCategory",
-         "AuditUserID", "ValidityFrom", "MaximumAmount", "LegacyID")
+         "ServCareType", "ServFrequency", "ServPatCat", "manualPrice", "ServPackageType",
+         "ServCategory", "AuditUserID", "ValidityFrom", "MaximumAmount", "LegacyID")
       VALUES (
-        '${uuid}', 
-        '${dto.ServCode}', 
-        '${dto.ServName}', 
-        '${dto.ServType}', 
-        '${dto.ServLevel}', 
+        ${uuid},
+        ${dto.ServCode},
+        ${dto.ServName},
+        ${dto.ServType},
+        ${dto.ServLevel},
         ${dto.ServPrice},
-        '${dto.ServCareType}',
+        ${dto.ServCareType},
+        ${dto.ServFrequency ?? null},
         ${dto.ServPatCat},
         ${dto.manualPrice},
-        '${dto.ServPackageType}',
-        ${dto.ServCategory ? `'${dto.ServCategory}'` : 'NULL'},
+        ${dto.ServPackageType},
+        ${dto.ServCategory ?? null},
         ${dto.AuditUserID},
-        '${dto.ValidityFrom}',
-        ${dto.MaximumAmount ?? 'NULL'},
-        ${dto.LegacyID ?? 'NULL'}
+        ${new Date(dto.ValidityFrom)},
+        ${dto.MaximumAmount ?? null},
+        ${dto.LegacyID ?? null}
       )
-    `);
+    `;
 
     return {
       message: 'Service created successfully',
@@ -407,7 +408,6 @@ async importCsv(csvContent: string, auditUserId: number) {
 }
 
 }
-
 
 
 
