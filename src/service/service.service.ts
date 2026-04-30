@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateServiceDto } from './dtos/create-service.dto';
 import { randomUUID } from 'crypto';
@@ -22,6 +22,15 @@ interface CsvServiceItem {
 @Injectable()
 export class ServiceService {
   constructor(private prisma: PrismaService) {}
+
+  private toListServiceDto(s: any) {
+    return {
+      ...s,
+      ServiceID: Number(s.ServiceID),
+      ServPrice: Number(s.ServPrice),
+      MaximumAmount: s.MaximumAmount ? Number(s.MaximumAmount) : null,
+    };
+  }
 
   // ------------------------------
   // List all active services
@@ -52,12 +61,42 @@ export class ServiceService {
     `;
 
     const services = await this.prisma.$queryRawUnsafe<any[]>(query);
-    return services.map((s) => ({
-      ...s,
-      ServiceID: Number(s.ServiceID),
-      ServPrice: Number(s.ServPrice),
-      MaximumAmount: s.MaximumAmount ? Number(s.MaximumAmount) : null,
-    }));
+    return services.map((s) => this.toListServiceDto(s));
+  }
+
+  async findOne(id: number) {
+    const services = await this.prisma.$queryRaw<any[]>`
+      SELECT 
+        s."ServiceID",
+        s."ServiceUUID",
+        s."ServCode",
+        s."ServName",
+        s."ServType",
+        s."ServLevel",
+        s."ServPrice",
+        s."ServCareType",
+        s."ServFrequency",
+        s."ServPatCat",
+        s."ValidityFrom",
+        s."ValidityTo",
+        s."AuditUserID",
+        s."MaximumAmount",
+        s."manualPrice",
+        s."ServPackageType",
+        s."ServCategory",
+        s."LegacyID"
+      FROM "tblServices" s
+      WHERE s."ValidityTo" IS NULL AND s."ServiceID" = ${id}
+      LIMIT 1
+    `;
+
+    const service = services[0];
+
+    if (!service) {
+      throw new NotFoundException(`Active service with ID ${id} not found`);
+    }
+
+    return this.toListServiceDto(service);
   }
 
   // ------------------------------
@@ -95,6 +134,139 @@ export class ServiceService {
       message: 'Service created successfully',
       ServiceUUID: uuid,
     };
+  }
+
+  async update(id: number, dto: CreateServiceDto) {
+    const updated = await this.prisma.$queryRaw<any[]>`
+      UPDATE "tblServices"
+      SET
+        "ServCode" = ${dto.ServCode},
+        "ServName" = ${dto.ServName},
+        "ServType" = ${dto.ServType},
+        "ServLevel" = ${dto.ServLevel},
+        "ServPrice" = ${dto.ServPrice},
+        "ServCareType" = ${dto.ServCareType},
+        "ServFrequency" = ${dto.ServFrequency ?? null},
+        "ServPatCat" = ${dto.ServPatCat},
+        "manualPrice" = ${dto.manualPrice},
+        "ServPackageType" = ${dto.ServPackageType},
+        "ServCategory" = ${dto.ServCategory ?? null},
+        "AuditUserID" = ${dto.AuditUserID},
+        "ValidityFrom" = ${new Date(dto.ValidityFrom)},
+        "MaximumAmount" = ${dto.MaximumAmount ?? null},
+        "LegacyID" = ${dto.LegacyID ?? null}
+      WHERE "ServiceID" = ${id} AND "ValidityTo" IS NULL
+      RETURNING
+        "ServiceID",
+        "ServiceUUID",
+        "ServCode",
+        "ServName",
+        "ServType",
+        "ServLevel",
+        "ServPrice",
+        "ServCareType",
+        "ServFrequency",
+        "ServPatCat",
+        "ValidityFrom",
+        "ValidityTo",
+        "AuditUserID",
+        "MaximumAmount",
+        "manualPrice",
+        "ServPackageType",
+        "ServCategory",
+        "LegacyID"
+    `;
+
+    const service = updated[0];
+
+    if (!service) {
+      throw new NotFoundException(`Active service with ID ${id} not found`);
+    }
+
+    return this.toListServiceDto(service);
+  }
+
+  async updatePrice(id: number, price: number, auditUserId?: number) {
+    const now = new Date();
+    const uuid = randomUUID();
+
+    const service = await this.prisma.$transaction(async (tx) => {
+      const expired = await tx.$queryRaw<any[]>`
+        UPDATE "tblServices"
+        SET "ValidityTo" = ${now}
+        WHERE "ServiceID" = ${id} AND "ValidityTo" IS NULL
+        RETURNING
+          "ServiceID",
+          "ServCode",
+          "ServName",
+          "ServType",
+          "ServLevel",
+          "ServCareType",
+          "ServFrequency",
+          "ServPatCat",
+          "AuditUserID",
+          "MaximumAmount",
+          "manualPrice",
+          "ServPackageType",
+          "ServCategory"
+      `;
+
+      const previousService = expired[0];
+
+      if (!previousService) {
+        throw new NotFoundException(`Active service with ID ${id} not found`);
+      }
+
+      const inserted = await tx.$queryRaw<any[]>`
+        INSERT INTO "tblServices"
+          ("ServiceUUID", "LegacyID", "ServCategory", "ServCode", "ServName",
+           "ServType", "ServLevel", "ServPrice", "ServCareType", "ServFrequency",
+           "ServPatCat", "ValidityFrom", "ValidityTo", "AuditUserID",
+           "MaximumAmount", "manualPrice", "ServPackageType")
+        VALUES (
+          ${uuid},
+          ${previousService.ServiceID},
+          ${previousService.ServCategory},
+          ${previousService.ServCode},
+          ${previousService.ServName},
+          ${previousService.ServType},
+          ${previousService.ServLevel},
+          ${price},
+          ${previousService.ServCareType},
+          ${previousService.ServFrequency},
+          ${previousService.ServPatCat},
+          ${now},
+          ${null},
+          ${auditUserId ?? previousService.AuditUserID},
+          ${previousService.MaximumAmount},
+          ${previousService.manualPrice},
+          ${previousService.ServPackageType}
+        )
+        RETURNING
+          "ServiceID",
+          "ServiceUUID",
+          "ServCode",
+          "ServName",
+          "ServType",
+          "ServLevel",
+          "ServPrice",
+          "ServCareType",
+          "ServFrequency",
+          "ServPatCat",
+          "ValidityFrom",
+          "ValidityTo",
+          "AuditUserID",
+          "MaximumAmount",
+          "manualPrice",
+          "ServPackageType",
+          "ServCategory",
+          "LegacyID"
+      `;
+
+      return inserted[0];
+    });
+
+    return this.toListServiceDto(service);
   }
 
   // ------------------------------
@@ -299,11 +471,17 @@ async importCsv(csvContent: string, auditUserId: number) {
   const codes = validRecords.map((r) => r.code.trim());
   
   let existingCodes: string[] = [];
+  const existingServicesByCode = new Map<string, { ServiceID: number }>();
   if (codes.length > 0) {
     const existingServices = await this.prisma.$queryRawUnsafe<{ ServCode: string; ServiceID: number }[]>(`
-      SELECT "ServiceID", "ServCode" FROM "tblServices" WHERE "ServCode" IN (${codes.map((c) => `'${c.replace(/'/g, "''")}'`).join(',')})
+      SELECT "ServiceID", "ServCode" FROM "tblServices" WHERE "ValidityTo" IS NULL AND "ServCode" IN (${codes.map((c) => `'${c.replace(/'/g, "''")}'`).join(',')})
     `);
     existingCodes = existingServices.map((s) => s.ServCode);
+    existingServices.forEach((service) => {
+      existingServicesByCode.set(service.ServCode, {
+        ServiceID: Number(service.ServiceID),
+      });
+    });
   }
 
   let inserted = 0;
@@ -353,20 +531,13 @@ async importCsv(csvContent: string, auditUserId: number) {
       }
 
       if (existingCodes.includes(record.code.trim())) {
-        // UPDATE
-        await this.prisma.$executeRawUnsafe(`
-          UPDATE "tblServices"
-          SET 
-            "ServName" = '${name}',
-            "ServType" = '${type}',
-            "ServLevel" = '${level}',
-            "ServPrice" = ${price},
-            "ServCareType" = '${careType}',
-            "ServCategory" = ${category},
-            "ServFrequency" = ${frequency},
-            "AuditUserID" = ${auditUserId}
-          WHERE "ServCode" = '${code}'
-        `);
+        const activeService = existingServicesByCode.get(record.code.trim());
+
+        if (!activeService) {
+          throw new Error(`Active service with code '${record.code}' not found`);
+        }
+
+        await this.updatePrice(activeService.ServiceID, Number(price), auditUserId);
         updated++;
       } else {
         // INSERT
@@ -408,8 +579,5 @@ async importCsv(csvContent: string, auditUserId: number) {
 }
 
 }
-
-
-
 
 

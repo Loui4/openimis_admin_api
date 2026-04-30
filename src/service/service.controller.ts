@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Request, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiOkResponse, ApiCreatedResponse, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
 import { ServiceService } from './service.service';
 import { ListServiceDto } from './dtos/list-service.dto';
 import { CreateServiceDto } from './dtos/create-service.dto';
+import { UpdateServicePriceDto } from './dtos/update-service-price.dto';
 
 @ApiTags('Service')
 @Controller('service')
@@ -18,6 +19,13 @@ export class ServiceController {
     return this.serviceService.findAll();
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get an active service by ID' })
+  @ApiOkResponse({ type: ListServiceDto })
+  async findOne(@Param('id', ParseIntPipe) id: number): Promise<ListServiceDto> {
+    return this.serviceService.findOne(id);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Create a new service' })
   @ApiCreatedResponse({ description: 'Service successfully created' })
@@ -30,6 +38,32 @@ export class ServiceController {
   @ApiCreatedResponse({ description: 'Medical service successfully created' })
   async createMedicalService(@Body() dto: CreateServiceDto) {
     return this.serviceService.create(dto);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update an active medical service' })
+  @ApiOkResponse({ type: ListServiceDto })
+  async updateMedicalService(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateServiceDto,
+  ) {
+    return this.serviceService.update(id, dto);
+  }
+
+  @Patch(':id/price')
+  @ApiOperation({ summary: 'Update an active medical service price' })
+  @ApiOkResponse({ type: ListServiceDto })
+  async updateMedicalServicePrice(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateServicePriceDto,
+    @Request() req: { user?: { userId?: number | string } },
+  ) {
+    const auditUserId = Number(req.user?.userId);
+    return this.serviceService.updatePrice(
+      id,
+      dto.ServPrice,
+      Number.isFinite(auditUserId) ? auditUserId : undefined,
+    );
   }
 
   // ✅ New CSV Upload Endpoint

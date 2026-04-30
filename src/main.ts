@@ -2,14 +2,13 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
-import { JwtAuthGuard } from "./user/jwt-auth.guard";  // adjust path if needed
+import { JwtAuthGuard } from './user/jwt-auth.guard'; // adjust path if needed
 import { Reflector } from '@nestjs/core';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-
-  const globalPrefix = process.env.GLOBAL_PREFIX || 'api/v1'
+  const globalPrefix = process.env.GLOBAL_PREFIX || 'api/v1';
 
   // Optional: enable CORS if you need it
   // app.enableCors({
