@@ -32,6 +32,20 @@ export class ServiceService {
     };
   }
 
+  private toValidityFromDate(validityFrom?: string) {
+    if (!validityFrom?.trim()) {
+      return new Date();
+    }
+
+    const parsedDate = new Date(validityFrom);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      throw new Error(`Invalid ValidityFrom value: '${validityFrom}'`);
+    }
+
+    return parsedDate;
+  }
+
   // ------------------------------
   // List all active services
   // ------------------------------
@@ -186,8 +200,8 @@ export class ServiceService {
     return this.toListServiceDto(service);
   }
 
-  async updatePrice(id: number, price: number, auditUserId?: number) {
-    const now = new Date();
+  async updatePrice(id: number, price: number, auditUserId?: number, validityFrom?: Date) {
+    const now = validityFrom ?? new Date();
     const uuid = randomUUID();
 
     const service = await this.prisma.$transaction(async (tx) => {
@@ -272,7 +286,9 @@ export class ServiceService {
   // ------------------------------
   // Dry Run CSV Import
   // ------------------------------
-async analyzeCsv(csvContent: string, auditUserId: number = 1) {
+async analyzeCsv(csvContent: string, auditUserId: number = 1, validityFrom?: string) {
+  this.toValidityFromDate(validityFrom);
+
   let records: CsvServiceItem[] = csv.parse(csvContent, {
     columns: true,
     skip_empty_lines: true,
@@ -451,7 +467,9 @@ async analyzeCsv(csvContent: string, auditUserId: number = 1) {
   // ------------------------------
   // Actual Import (Insert or Update)
   // ------------------------------
-async importCsv(csvContent: string, auditUserId: number) {
+async importCsv(csvContent: string, auditUserId: number, validityFrom?: string) {
+  const validityFromDate = this.toValidityFromDate(validityFrom);
+
   const records: CsvServiceItem[] = csv.parse(csvContent, {
     columns: true,
     skip_empty_lines: true,
@@ -537,7 +555,7 @@ async importCsv(csvContent: string, auditUserId: number) {
           throw new Error(`Active service with code '${record.code}' not found`);
         }
 
-        await this.updatePrice(activeService.ServiceID, Number(price), auditUserId);
+        await this.updatePrice(activeService.ServiceID, Number(price), auditUserId, validityFromDate);
         updated++;
       } else {
         // INSERT
@@ -550,7 +568,7 @@ async importCsv(csvContent: string, auditUserId: number) {
             "AuditUserID", "manualPrice", "ServPackageType"
           ) VALUES (
             '${uuid}', ${category}, '${code}', '${name}', '${type}', '${level}', 
-            ${price}, '${careType}', ${frequency}, 0, NOW(), 
+            ${price}, '${careType}', ${frequency}, 0, '${validityFromDate.toISOString()}', 
             ${auditUserId}, false, 'C'
           )
         `.replace(/\s+/g, ' ').trim();
@@ -579,5 +597,4 @@ async importCsv(csvContent: string, auditUserId: number) {
 }
 
 }
-
 

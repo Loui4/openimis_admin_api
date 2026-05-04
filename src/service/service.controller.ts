@@ -72,11 +72,14 @@ export class ServiceController {
   @ApiConsumes('multipart/form-data')
   @ApiCreatedResponse({ description: 'CSV file processed successfully' })
   @UseInterceptors(FileInterceptor('file'))
-  async dryUploadCsv(@UploadedFile() file: Express.Multer.File) {
+  async dryUploadCsv(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('validityFrom') validityFrom?: string,
+  ) {
     if (!file) {
       throw new Error('No file provided');
     }
-     return this.serviceService.analyzeCsv(file.buffer.toString('utf-8'));
+     return this.serviceService.analyzeCsv(file.buffer.toString('utf-8'), 1, validityFrom);
   }
 
   @Post('upload-csv')
@@ -84,10 +87,13 @@ export class ServiceController {
   @ApiConsumes('multipart/form-data')
   @ApiCreatedResponse({ description: 'CSV file processed successfully' })
   @UseInterceptors(FileInterceptor('file'))
-  async uploadCsv(@UploadedFile() file: Express.Multer.File) {
+  async uploadCsv(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('validityFrom') validityFrom?: string,
+  ) {
     if (!file) {
       throw new Error('No file provided');
     }
-     return this.serviceService.importCsv(file.buffer.toString('utf-8'),1);
+     return this.serviceService.importCsv(file.buffer.toString('utf-8'), 1, validityFrom);
   }
 }
