@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Request, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, ParseIntPipe, Patch, Post, Request, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiOkResponse, ApiCreatedResponse, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
 import { ServiceService } from './service.service';
@@ -17,6 +17,15 @@ export class ServiceController {
   @ApiOkResponse({ type: [ListServiceDto] })
   async findAll(): Promise<ListServiceDto[]> {
     return this.serviceService.findAll();
+  }
+
+  @Get('export-csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="services_and_fcodes2026.csv"')
+  @ApiOperation({ summary: 'Export active medical services as CSV' })
+  @ApiOkResponse({ description: 'CSV export generated successfully' })
+  async exportCsv(): Promise<string> {
+    return this.serviceService.exportCsv();
   }
 
   @Get(':id')

@@ -19,6 +19,37 @@ interface CsvServiceItem {
   minor_cat?: number;
 }
 
+type ServiceExportRow = {
+  ServCode: string;
+  ServName: string;
+  ServType: string;
+  ServLevel: string;
+  ServPrice: unknown;
+  ServCategory?: string | null;
+  ServCareType: string;
+  ServFrequency?: number | null;
+  ServPatCat?: number | null;
+};
+
+type ServiceVersionUpdate = {
+  ServName?: string;
+};
+
+const SERVICE_EXPORT_HEADERS = [
+  'code',
+  'name',
+  'type',
+  'level',
+  'price',
+  'category',
+  'care_type',
+  'frequency',
+  'male_cat',
+  'female_cat',
+  'adult_cat',
+  'minor_cat',
+];
+
 @Injectable()
 export class ServiceService {
   constructor(private prisma: PrismaService) {}
@@ -44,6 +75,63 @@ export class ServiceService {
     }
 
     return parsedDate;
+  }
+
+  private formatCsvCell(value: unknown) {
+    const text = value === null || value === undefined ? '' : String(value);
+
+    if (/[",\r\n]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+
+    return text;
+  }
+
+  private formatCsvNumber(value: unknown) {
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+
+    const text = String(value);
+
+    if (!/^-?\d+(\.\d+)?$/.test(text)) {
+      return text;
+    }
+
+    return text.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
+  }
+
+  private toPatientCategoryFlags(value: unknown) {
+    const category = Number(value);
+
+    if (!Number.isFinite(category) || category === 0) {
+      return {
+        male_cat: 1,
+        female_cat: 1,
+        adult_cat: 1,
+        minor_cat: 1,
+      };
+    }
+
+    return {
+      male_cat: category & 1 ? 1 : 0,
+      female_cat: category & 2 ? 1 : 0,
+      adult_cat: category & 4 ? 1 : 0,
+      minor_cat: category & 8 ? 1 : 0,
+    };
+  }
+
+  private toPatientCategoryValue(record: CsvServiceItem) {
+    const flags = [
+      Number(record.male_cat) === 1 ? 1 : 0,
+      Number(record.female_cat) === 1 ? 2 : 0,
+      Number(record.adult_cat) === 1 ? 4 : 0,
+      Number(record.minor_cat) === 1 ? 8 : 0,
+    ];
+
+    const value = flags.reduce((sum, flag) => sum + flag, 0);
+
+    return value === 0 ? 15 : value;
   }
 
   // ------------------------------
@@ -76,6 +164,47 @@ export class ServiceService {
 
     const services = await this.prisma.$queryRawUnsafe<any[]>(query);
     return services.map((s) => this.toListServiceDto(s));
+  }
+
+  async exportCsv() {
+    const services = await this.prisma.$queryRaw<ServiceExportRow[]>`
+      SELECT
+        s."ServCode",
+        s."ServName",
+        s."ServType",
+        s."ServLevel",
+        s."ServPrice",
+        s."ServCategory",
+        s."ServCareType",
+        s."ServFrequency",
+        s."ServPatCat"
+      FROM "tblServices" s
+      WHERE s."ValidityTo" IS NULL
+      ORDER BY s."ServiceID" ASC
+    `;
+
+    const rows = services.map((service) => {
+      const patientCategoryFlags = this.toPatientCategoryFlags(service.ServPatCat);
+
+      return [
+        service.ServCode,
+        service.ServName,
+        service.ServType,
+        service.ServLevel,
+        this.formatCsvNumber(service.ServPrice),
+        service.ServCategory,
+        service.ServCareType,
+        service.ServFrequency,
+        patientCategoryFlags.male_cat,
+        patientCategoryFlags.female_cat,
+        patientCategoryFlags.adult_cat,
+        patientCategoryFlags.minor_cat,
+      ]
+        .map((value) => this.formatCsvCell(value))
+        .join(',');
+    });
+
+    return [SERVICE_EXPORT_HEADERS.join(','), ...rows].join('\r\n') + '\r\n';
   }
 
   async findOne(id: number) {
@@ -200,7 +329,13 @@ export class ServiceService {
     return this.toListServiceDto(service);
   }
 
-  async updatePrice(id: number, price: number, auditUserId?: number, validityFrom?: Date) {
+  async updatePrice(
+    id: number,
+    price: number,
+    auditUserId?: number,
+    validityFrom?: Date,
+    updates: ServiceVersionUpdate = {},
+  ) {
     const now = validityFrom ?? new Date();
     const uuid = randomUUID();
 
@@ -242,7 +377,9 @@ export class ServiceService {
           ${previousService.ServiceID},
           ${previousService.ServCategory},
           ${previousService.ServCode},
-          ${previousService.ServName},
+          ${updates.ServName?.trim()
+            ? updates.ServName.trim().substring(0, 100)
+            : previousService.ServName},
           ${previousService.ServType},
           ${previousService.ServLevel},
           ${price},
@@ -530,11 +667,13 @@ async importCsv(csvContent: string, auditUserId: number, validityFrom?: string) 
   for (const record of validRecords) {
     try {
       const code = record.code.trim().replace(/'/g, "''").substring(0, 6);
-      const name = (record.name || '').replace(/'/g, "''").substring(0, 100);
+      const importedName = (record.name || '').substring(0, 100);
+      const name = importedName.replace(/'/g, "''");
       const type = (record.type || 'C').replace(/'/g, "''").substring(0, 1);
       const level = (record.level || 'S').replace(/'/g, "''").substring(0, 1);
       const price = record.price || 0;
       const careType = (record.care_type || 'O').replace(/'/g, "''").substring(0, 1);
+      const patientCategory = this.toPatientCategoryValue(record);
       
       // Handle category - can be NULL
       let category = 'NULL';
@@ -555,7 +694,9 @@ async importCsv(csvContent: string, auditUserId: number, validityFrom?: string) 
           throw new Error(`Active service with code '${record.code}' not found`);
         }
 
-        await this.updatePrice(activeService.ServiceID, Number(price), auditUserId, validityFromDate);
+        await this.updatePrice(activeService.ServiceID, Number(price), auditUserId, validityFromDate, {
+          ServName: importedName,
+        });
         updated++;
       } else {
         // INSERT
@@ -568,7 +709,7 @@ async importCsv(csvContent: string, auditUserId: number, validityFrom?: string) 
             "AuditUserID", "manualPrice", "ServPackageType"
           ) VALUES (
             '${uuid}', ${category}, '${code}', '${name}', '${type}', '${level}', 
-            ${price}, '${careType}', ${frequency}, 0, '${validityFromDate.toISOString()}', 
+            ${price}, '${careType}', ${frequency}, ${patientCategory}, '${validityFromDate.toISOString()}', 
             ${auditUserId}, false, 'C'
           )
         `.replace(/\s+/g, ' ').trim();
@@ -597,4 +738,3 @@ async importCsv(csvContent: string, auditUserId: number, validityFrom?: string) 
 }
 
 }
-
